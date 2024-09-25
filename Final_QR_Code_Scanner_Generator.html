@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text to QR Code Generator</title>
+    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+    <script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
+</head>
+<body>
+
+    <h1>Text to QR Code Generator</h1>
+
+    <label for="userText">Enter Text:</label>
+    <input type="text" id="userText" placeholder="Type your text here">
+
+    <button onclick="generateQRCodes()">Generate QR Codes</button>
+    <button onclick="startScanning()">Scan QR Code</button>
+
+    <video id="video" width="300" height="300" style="display:none;" autoplay></video>
+    <canvas id="canvas" width="300" height="300" style="display:none;"></canvas>
+
+    <div id="qrcodes-container"></div>
+
+    <script>
+        let videoStream;
+
+        function generateQRCodes() {
+            const userText = document.getElementById('userText').value;
+
+            if (userText.trim() === '') {
+                alert('Please enter text.');
+                return;
+            }
+
+            const container = document.getElementById('qrcodes-container');
+            container.innerHTML = '';
+
+            const prefixes = ['A=', 'C=', 'E=', 'G=', 'I=', 'K=', 'M=', 'Y=', 'Q=', 'U='];
+
+            for (let i = 0; i < 10; i++) {
+                const modifiedText = modifyText(userText, prefixes[i]);
+                const qrContainer = document.createElement('div');
+                qrContainer.className = 'qr-container';
+                qrContainer.innerHTML = '<p>QR Code ' + (i + 1) + '</p>';
+                container.appendChild(qrContainer);
+
+                new QRCode(qrContainer, {
+                    text: modifiedText,
+                    width: 128,
+                    height: 128
+                });
+            }
+        }
+
+        function modifyText(text, prefix) {
+            // Remove last 2 digits and add the prefix
+            return text.slice(0, -2) + prefix;
+        }
+
+        async function startScanning() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const canvasContext = canvas.getContext('2d');
+            video.style.display = 'block';
+
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    alert('Your browser does not support camera access. Please use a modern browser.');
+                    return;
+                }
+
+                // Request camera access and start video stream
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                video.srcObject = videoStream;
+                
+                scanQRCode(canvas, canvasContext, video);
+
+            } catch (error) {
+                console.error('Error accessing the camera: ', error);
+                alert('Error accessing the camera. Please ensure camera permissions are enabled and try again.');
+            }
+        }
+
+        function scanQRCode(canvas, canvasContext, video) {
+            const scan = () => {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                    if (code) {
+                        document.getElementById('userText').value = code.data;  // Insert scanned QR code text
+                        generateQRCodes();  // Automatically generate QR codes
+                        stopCamera();  // Stop the video stream
+                        video.style.display = 'none';  // Hide the video after scanning
+                    }
+                }
+                requestAnimationFrame(scan);  // Continuously scan for QR code
+            };
+            scan();
+        }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());  // Stop the video stream
+            }
+        }
+    </script>
+
+    <style>
+        #qrcodes-container {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .qr-container {
+            margin: 10px;
+            text-align: center;
+        }
+
+        canvas {
+            margin-top: 10px;
+        }
+
+        video {
+            margin-top: 20px;
+            border: 1px solid black;
+        }
+    </style>
+
+</body>
+</html>
